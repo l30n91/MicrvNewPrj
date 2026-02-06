@@ -16,7 +16,7 @@ void Task1(void* arg)
  (void)arg;
 	for(;;)
    {
-//     GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
+     GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
 		 osDelay(2000);
 	 }
 }
@@ -36,9 +36,9 @@ void createTask(osThreadFunc_t Task)
 {
 	
 	//SystemCoreClockUpdate();
+	GPIO_Init();
 	EventRecorderInitialize(EventRecordAll, 1U);
 	EventRecorderStart();
-	GPIO_Init();
 	Task1_p=Task1; /*solo a scopo dimostrativo passo il puntatore, potrei passare direttamente la funzione Task1 ad osThreadNew*/
   osKernelInitialize();
 	createTask(Task1_p);
@@ -51,9 +51,9 @@ void createTask(osThreadFunc_t Task)
 void GPIO_Init(void)
 {
 
-  //RCC->AHB1ENR |=  1;             /* enable GPIOA clock */
-  //GPIOA->MODER &= ~0x00000C00;    /* clear pin mode */
-  //GPIOA->MODER |=  0x00000400;    /* set pin to output mode */
-  //GPIOA->MODER |=  (1U << (5 * 2));  // set PA5 come output	
+  RCC->AHB1ENR |=  1;             /* enable GPIOA clock */
+  GPIOA->MODER &= ~0x00000C00;    /* clear pin mode */
+  GPIOA->MODER |=  0x00000400;    /* set pin to output mode */
+  GPIOA->MODER |=  (1U << (5 * 2));  // set PA5 come output	
 }
  
