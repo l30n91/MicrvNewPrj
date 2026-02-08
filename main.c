@@ -21,7 +21,21 @@ void Task1(void* arg)
 	 }
 }
 
-void createTask(osThreadFunc_t Task)
+
+void Task2(void*);
+void Task2(void* arg)
+{
+ (void)arg;
+	for(;;)
+   {
+     //GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
+		 osDelay(2000);
+	 }
+}
+
+
+
+void createTask1(osThreadFunc_t Task)
 {
   osThreadAttr_t attr = {0};
   attr.name = "LedBlink";
@@ -30,6 +44,15 @@ void createTask(osThreadFunc_t Task)
   osThreadNew(Task,NULL,&attr);
  }
 
+ 
+ void createTask2(osThreadFunc_t Task)
+{
+  osThreadAttr_t attr = {0};
+  attr.name = "LedBlink2";
+  attr.stack_size = 512;
+  attr.priority = osPriorityNormal;
+  osThreadNew(Task,NULL,&attr);
+ }
 
  
  int main (void)
@@ -41,7 +64,8 @@ void createTask(osThreadFunc_t Task)
 	EventRecorderStart();
 	Task1_p=Task1; /*solo a scopo dimostrativo passo il puntatore, potrei passare direttamente la funzione Task1 ad osThreadNew*/
   osKernelInitialize();
-	createTask(Task1_p);
+	createTask1(Task1_p);
+	createTask2(Task2);
 	osKernelStart();
 	for(;;) {}
 	
