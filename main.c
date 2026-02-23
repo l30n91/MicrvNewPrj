@@ -8,15 +8,21 @@ void GPIO_Init(void);
 //typedef void (*osThreadFunc_t) (void *argument);
 osThreadFunc_t Task1_p;   //un puntatore a funzione è un puntatore non è una funzione, quindi è
                          //una variabile che contiene l'indirizzo di quel tipo di funzione							
-
+typedef struct {
+  uint8_t data[8];
+} msg_t;
+osMessageQueueId_t shared_queue;
 
 void Task1(void*);
 void Task1(void* arg)
 {
  (void)arg;
+	msg_t m1 = { .data = {1,2,3,4,5,6,7,8} };
 	for(;;)
    {
-     GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
+    
+		 osMessageQueuePut(shared_queue, &m1, 0U, osWaitForever);
+		 GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
 		 osDelay(2000);
 	 }
 }
@@ -26,9 +32,12 @@ void Task2(void*);
 void Task2(void* arg)
 {
  (void)arg;
+	msg_t m2;
 	for(;;)
    {
-     //GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
+     osMessageQueueGet(shared_queue, &m2, NULL, osWaitForever);
+    // m.data contiene una COPIA sicura
+		 //GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
 		 osDelay(2000);
 	 }
 }
@@ -63,7 +72,8 @@ void createTask1(osThreadFunc_t Task)
 	EventRecorderInitialize(EventRecordAll, 1U);
 	EventRecorderStart();
 	Task1_p=Task1; /*solo a scopo dimostrativo passo il puntatore, potrei passare direttamente la funzione Task1 ad osThreadNew*/
-  osKernelInitialize();
+	osKernelInitialize();
+	shared_queue = osMessageQueueNew(4, 8*sizeof(uint8_t), NULL);
 	createTask1(Task1_p);
 	createTask2(Task2);
 	osKernelStart();
