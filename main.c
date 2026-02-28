@@ -6,12 +6,13 @@
 void GPIO_Init(void);
 void USART2_init(void);
 void USART2_WriteTest(void);
+void USART2_WriteString(uint8_t*); 
 
 //typedef void (*osThreadFunc_t) (void *argument);
 osThreadFunc_t Task1_p;   //un puntatore a funzione è un puntatore non è una funzione, quindi è
                          //una variabile che contiene l'indirizzo di quel tipo di funzione							
 typedef struct {
-  uint8_t data[8];
+  char array [200];
 } msg_t;
 osMessageQueueId_t shared_queue;
 
@@ -19,11 +20,12 @@ void Task1(void*);
 void Task1(void* arg)
 {
  (void)arg;
-	msg_t m1 = { .data = {1,2,3,4,5,6,7,8} };
+	//msg_t m1 = { .data = {1,2,3,4,5,6,7,8} };
+	const char string[]="Hello World from task1\n\r";
 	for(;;)
    {
-    
-		 osMessageQueuePut(shared_queue, &m1, 0U, osWaitForever);
+     
+		 osMessageQueuePut(shared_queue, string, 0U, osWaitForever);
 		 GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
 		 osDelay(2000);
 	 }
@@ -34,22 +36,40 @@ void Task2(void*);
 void Task2(void* arg)
 {
  (void)arg;
-	msg_t m2;
+	//msg_t m2;
+	const char string[]="Hello World from task2\n\r";
 	for(;;)
    {
-     osMessageQueueGet(shared_queue, &m2, NULL, osWaitForever);
+     osMessageQueuePut(shared_queue, string, 0U, osWaitForever);
+		 //osMessageQueueGet(shared_queue, &m2, NULL, osWaitForever);
     // m.data contiene una COPIA sicura
 		 //GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
 		 osDelay(2000);
 	 }
 }
 
-
+void Task3(void*);
+void Task3(void* arg)
+{
+ (void)arg;
+	msg_t m2;
+	uint8_t* p;
+	p= (uint8_t*)&m2;
+	for(;;)
+   {
+     osMessageQueueGet(shared_queue, &m2, NULL, osWaitForever);
+		 USART2_WriteString((uint8_t*)p);
+    // m.data contiene una COPIA sicura
+		 //GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
+		 osDelay(2000);
+	 }
+}
 
 void createTask1(osThreadFunc_t Task)
 {
+  
   osThreadAttr_t attr = {0};
-  attr.name = "LedBlink";
+  attr.name = "Task1";
   attr.stack_size = 512;
   attr.priority = osPriorityNormal;
   osThreadNew(Task,NULL,&attr);
@@ -58,13 +78,21 @@ void createTask1(osThreadFunc_t Task)
  
  void createTask2(osThreadFunc_t Task)
 {
+  
   osThreadAttr_t attr = {0};
-  attr.name = "LedBlink2";
+  attr.name = "Task2";
   attr.stack_size = 512;
   attr.priority = osPriorityNormal;
   osThreadNew(Task,NULL,&attr);
  }
-
+void createTask3_UsartWrite(osThreadFunc_t Task)
+{
+  osThreadAttr_t attr = {0};
+  attr.name = "Task3";
+  attr.stack_size = 512;
+  attr.priority = osPriorityNormal;
+  osThreadNew(Task,NULL,&attr);
+ }
  
  int main (void)
 {
@@ -77,9 +105,10 @@ void createTask1(osThreadFunc_t Task)
 	EventRecorderStart();
 	Task1_p = Task1; /*solo a scopo dimostrativo passo il puntatore, potrei passare direttamente la funzione Task1 ad osThreadNew*/
 	osKernelInitialize();
-	shared_queue = osMessageQueueNew(4, 8*sizeof(uint8_t), NULL);
+	shared_queue = osMessageQueueNew(4, 200*sizeof(uint8_t), NULL);
 	createTask1(Task1_p);
 	createTask2(Task2);
+	createTask3_UsartWrite(Task3);
 	osKernelStart();
 	for(;;) {
   
@@ -123,15 +152,28 @@ void USART2_init(void) {
 
 
 void USART2_WriteTest(void) {
-char string_[]= "anna ";
+char string_[]= "Test OK software started\n\r";
      uint8_t* p_string=(uint8_t*)string_;
      
-     while(*p_string !=' ')
+     while(*p_string !='\0')
      {
        while(!(USART2->SR & USART_SR_TXE)); /* wait until TX is enabled*/
        
-       USART2->DR= *p_string;
+       USART2->DR = *p_string;
        
+       p_string ++;
+     }
+}
+
+
+void USART2_WriteString(uint8_t* p_string) {
+//char string_[]= "anna ";
+     //uint8_t* p_string=(uint8_t*)string_;
+     
+     while(*p_string !='\0')
+     {
+       while(!(USART2->SR & USART_SR_TXE)); /* wait until TX is enabled*/
+       USART2->DR= *p_string;
        p_string ++;
      }
 }
