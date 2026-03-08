@@ -1,1 +1,1 @@
-This Project is a training RTO with C
+This Project is a training RTOS with C
