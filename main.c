@@ -7,6 +7,9 @@ void GPIO_Init(void);
 void USART2_init(void);
 void USART2_WriteTest(void);
 void USART2_WriteString(uint8_t*); 
+static void DMA1_Stream6_Init(void);
+static void USART2_StartTxDMA(uint8_t *, uint16_t);
+osSemaphoreId_t semTxDone;
 
 //typedef void (*osThreadFunc_t) (void *argument);
 osThreadFunc_t Task1_p;   //un puntatore a funzione è un puntatore non è una funzione, quindi è
@@ -58,7 +61,8 @@ void Task3(void* arg)
 	for(;;)
    {
      osMessageQueueGet(shared_queue, &m2, NULL, osWaitForever);
-		 USART2_WriteString((uint8_t*)p);
+		 //USART2_WriteString((uint8_t*)p);
+     USART2_StartTxDMA(p, sizeof(m2));
     // m.data contiene una COPIA sicura
 		 //GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
 		 osDelay(2000);
@@ -101,6 +105,7 @@ void createTask3_UsartWrite(osThreadFunc_t Task)
 	GPIO_Init();
 	USART2_init();
   USART2_WriteTest(); /* Check if USART2 Writes on the terminal*/
+  DMA1_Stream6_Init();
   EventRecorderInitialize(EventRecordAll, 1U);
 	EventRecorderStart();
 	Task1_p = Task1; /*solo a scopo dimostrativo passo il puntatore, potrei passare direttamente la funzione Task1 ad osThreadNew*/
@@ -127,7 +132,10 @@ void GPIO_Init(void)
 }
 
 
-
+/* =========================
+ * GPIO PA2 = USART2_TX
+ * PA3 = USART2_RX
+ * ========================= */
 void USART2_init(void) {
     // Clock GPIOA e USART2
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
@@ -176,4 +184,100 @@ void USART2_WriteString(uint8_t* p_string) {
        USART2->DR= *p_string;
        p_string ++;
      }
+}
+
+
+static void DMA1_Stream6_Init(void)
+{
+    RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
+
+    /* Disabilita stream */
+    DMA1_Stream6->CR &= ~DMA_SxCR_EN;
+    while (DMA1_Stream6->CR & DMA_SxCR_EN) {}
+
+    /* Clear flags */
+    DMA1->HIFCR =
+          DMA_HIFCR_CTCIF6
+        | DMA_HIFCR_CHTIF6
+        | DMA_HIFCR_CTEIF6
+        | DMA_HIFCR_CDMEIF6
+        | DMA_HIFCR_CFEIF6;
+
+    NVIC_SetPriority(DMA1_Stream6_IRQn, 5);
+    NVIC_EnableIRQ(DMA1_Stream6_IRQn);
+}
+
+/* =========================
+ * IRQ DMA1 Stream6
+ * ========================= */
+void DMA1_Stream6_IRQHandler(void)
+{
+    /* Transfer complete stream 6? */
+    if (DMA1->HISR & DMA_HISR_TCIF6) {
+
+        /* Clear flag */
+        DMA1->HIFCR = DMA_HIFCR_CTCIF6;
+
+        /* Disabilita stream */
+        DMA1_Stream6->CR &= ~DMA_SxCR_EN;
+
+        /* opzionale: togli richiesta DMA su USART */
+        USART2->CR3 &= ~USART_CR3_DMAT;
+
+        /* Notifica task */
+        osSemaphoreRelease(semTxDone);
+    }
+
+    /* Eventuali errori */
+    if (DMA1->HISR & DMA_HISR_TEIF6) {
+        DMA1->HIFCR = DMA_HIFCR_CTEIF6;
+        DMA1_Stream6->CR &= ~DMA_SxCR_EN;
+        USART2->CR3 &= ~USART_CR3_DMAT;
+        osSemaphoreRelease(semTxDone);
+    }
+}
+
+
+static void USART2_StartTxDMA(uint8_t *buf, uint16_t len)
+{
+    /* Disabilita stream prima di riconfigurare */
+    DMA1_Stream6->CR &= ~DMA_SxCR_EN;
+    while (DMA1_Stream6->CR & DMA_SxCR_EN) {}
+
+    /* Pulisce i flag dello stream 6 */
+    DMA1->HIFCR =
+          DMA_HIFCR_CTCIF6
+        | DMA_HIFCR_CHTIF6
+        | DMA_HIFCR_CTEIF6
+        | DMA_HIFCR_CDMEIF6
+        | DMA_HIFCR_CFEIF6;
+
+    /* Peripheral address = USART2 data register */
+    DMA1_Stream6->PAR  = (uint32_t)&USART2->DR;
+
+    /* Memory address = buffer sorgente */
+    DMA1_Stream6->M0AR = (uint32_t)buf;
+
+    /* Numero di byte */
+    DMA1_Stream6->NDTR = len;
+
+    /* Configurazione:
+       - Channel 4
+       - mem->periph
+       - minc enable
+       - peripheral increment disable
+       - 8 bit / 8 bit
+       - transfer complete interrupt enable
+    */
+    DMA1_Stream6->CR =
+          (4U << DMA_SxCR_CHSEL_Pos)   /* Channel 4 */
+        | DMA_SxCR_MINC                /* memory increment */
+        | DMA_SxCR_DIR_0               /* memory-to-peripheral */
+        | DMA_SxCR_TCIE;               /* transfer complete interrupt */
+
+    /* Abilita richiesta DMA TX lato USART */
+    USART2->CR3 |= USART_CR3_DMAT;
+
+    /* Avvia stream */
+    DMA1_Stream6->CR |= DMA_SxCR_EN;
 }
