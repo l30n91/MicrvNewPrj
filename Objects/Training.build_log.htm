@@ -22,12 +22,83 @@ Dialog DLL:      TCM.DLL V1.56.1.0
  
 <h2>Project:</h2>
 C:\Users\bl91\Desktop\MicroVNewPrj\MicrvNewPrj\Training.uvprojx
-Project File Date:  02/26/2026
+Project File Date:  03/08/2026
 
 <h2>Output:</h2>
 *** Using Compiler 'V6.18', folder: 'C:\Keil_v5\ARM\ARMCLANG\Bin'
 Build target 'Target_1'
-".\Objects\Training.axf" - 0 Error(s), 0 Warning(s).
+main.c(27): warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+        const char string[]="Hello World from task1\n\r";
+                   ^
+main.c(24): warning: function 'Task1' could be declared with attribute 'noreturn' [-Wmissing-noreturn]
+{
+^
+main.c(43): warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+        const char string[]="Hello World from task2\n\r";
+                   ^
+main.c(40): warning: function 'Task2' could be declared with attribute 'noreturn' [-Wmissing-noreturn]
+{
+^
+main.c(58): warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+        msg_t m2;
+              ^
+main.c(56): warning: function 'Task3' could be declared with attribute 'noreturn' [-Wmissing-noreturn]
+{
+^
+main.c(72): warning: no previous prototype for function 'createTask1' [-Wmissing-prototypes]
+void createTask1(osThreadFunc_t Task)
+     ^
+main.c(72): note: declare 'static' if the function is not intended to be used outside of this translation unit
+void createTask1(osThreadFunc_t Task)
+^
+static 
+main.c(83): warning: no previous prototype for function 'createTask2' [-Wmissing-prototypes]
+ void createTask2(osThreadFunc_t Task)
+      ^
+main.c(83): note: declare 'static' if the function is not intended to be used outside of this translation unit
+ void createTask2(osThreadFunc_t Task)
+ ^
+ static 
+main.c(92): warning: no previous prototype for function 'createTask3_UsartWrite' [-Wmissing-prototypes]
+void createTask3_UsartWrite(osThreadFunc_t Task)
+     ^
+main.c(92): note: declare 'static' if the function is not intended to be used outside of this translation unit
+void createTask3_UsartWrite(osThreadFunc_t Task)
+^
+static 
+main.c(129): warning: implicit conversion changes signedness: 'int' to 'unsigned int' [-Wsign-conversion]
+  GPIOA->MODER &= ~0x00000C00;    /* clear pin mode */
+               ~~ ^~~~~~~~~~~
+main.c(213): warning: no previous prototype for function 'DMA1_Stream6_IRQHandler' [-Wmissing-prototypes]
+void DMA1_Stream6_IRQHandler(void)
+     ^
+main.c(213): note: declare 'static' if the function is not intended to be used outside of this translation unit
+void DMA1_Stream6_IRQHandler(void)
+^
+static 
+main.c(12): warning: no previous extern declaration for non-static variable 'semTxDone' [-Wmissing-variable-declarations]
+osSemaphoreId_t semTxDone;
+                ^
+main.c(12): note: declare 'static' if the variable is not intended to be used outside of this translation unit
+osSemaphoreId_t semTxDone;
+^
+main.c(15): warning: no previous extern declaration for non-static variable 'Task1_p' [-Wmissing-variable-declarations]
+osThreadFunc_t Task1_p;   //un puntatore a funzione <E8> un puntatore non <E8> una funzione, quindi <E8>
+               ^
+main.c(15): note: declare 'static' if the variable is not intended to be used outside of this translation unit
+osThreadFunc_t Task1_p;   //un puntatore a funzione <E8> un puntatore non <E8> una funzione, quindi <E8>
+^
+main.c(20): warning: no previous extern declaration for non-static variable 'shared_queue' [-Wmissing-variable-declarations]
+osMessageQueueId_t shared_queue;
+                   ^
+main.c(20): note: declare 'static' if the variable is not intended to be used outside of this translation unit
+osMessageQueueId_t shared_queue;
+^
+14 warnings generated.
+compiling main.c...
+linking...
+Program Size: Code=21788 RO-data=884 RW-data=168 ZI-data=37520  
+".\Objects\Training.axf" - 0 Error(s), 14 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -78,8 +149,8 @@ Package Vendor: Keil
 
    * Component: ARM::CMSIS-View:Event Recorder:DAP:1.6.0
       Include file:  EventRecorder/Config/EventRecorderConf.h
-      Source file:   EventRecorder/Source/EventRecorder.c
       Include file:  EventRecorder/Include/EventRecorder.h
+      Source file:   EventRecorder/Source/EventRecorder.c
 
    * Component: ARM::CMSIS:CORE:6.0.0
 
@@ -87,40 +158,40 @@ Package Vendor: Keil
       Source file:   CMSIS/RTOS2/Source/os_systick.c
 
    * Component: ARM::CMSIS:RTOS2:Keil RTX5:Source:5.9.0
+      Source file:   Source/rtx_evflags.c
+      Source file:   Template/Mutex.c
+      Source file:   Source/rtx_kernel.c
+      Include file:  Config/RTX_Config.h
+      Source file:   Template/Semaphore.c
+      Source file:   Template/MsgQueue.c
+      Source file:   Config/RTX_Config.c
+      Include file:  Include/rtx_os.h
+      Source file:   Template/Events.c
+      Source file:   Template/MemPool.c
+      Source file:   Template/Thread.c
+      Source file:   Template/Timer.c
+      Source file:   Template/svc_user.c
+      Source file:   Source/rtx_delay.c
       Source file:   Source/rtx_thread.c
       Source file:   Source/rtx_timer.c
-      Include file:  Include/rtx_os.h
-      Source file:   Template/main.c
-      Source file:   Template/Timer.c
-      Source file:   Source/rtx_evflags.c
       Source file:   Source/rtx_mutex.c
       Source file:   Source/rtx_semaphore.c
-      Source file:   Template/MsgQueue.c
-      Source file:   Template/MemPool.c
-      Source file:   Template/Mutex.c
-      Source file:   Template/svc_user.c
-      Source file:   Config/RTX_Config.c
-      Source file:   Template/Events.c
-      Source file:   Template/Semaphore.c
-      Include file:  Config/RTX_Config.h
-      Source file:   Template/Thread.c
-      Source file:   Source/rtx_kernel.c
-      Source file:   Source/rtx_delay.c
-      Source file:   Source/rtx_lib.c
-      Source file:   Source/GCC/irq_armv7m.S
       Source file:   Source/rtx_memory.c
       Source file:   Source/rtx_mempool.c
       Source file:   Source/rtx_msgqueue.c
+      Source file:   Template/main.c
       Source file:   Source/rtx_system.c
+      Source file:   Source/GCC/irq_armv7m.S
       Source file:   Source/rtx_evr.c
+      Source file:   Source/rtx_lib.c
 
    * Component: Keil::Device:Startup:2.6.3
-      Source file:   MDK/Device/Source/ARM/STM32F4xx_OTP.s
       Include file:  Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f4xx.h
       Source file:   MDK/Device/Source/ARM/STM32F446xx_OPT.s
+      Source file:   MDK/Device/Source/ARM/STM32F4xx_OTP.s
       Source file:   Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/arm/startup_stm32f446xx.s
       Source file:   Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/system_stm32f4xx.c
-Build Time Elapsed:  00:00:00
+Build Time Elapsed:  00:00:01
 </pre>
 </body>
 </html>
