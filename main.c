@@ -1,243 +1,88 @@
-#include "rtx_os.h"
-#include "stm32f4xx.h"                 
 #include "cmsis_os2.h"
+#include "stm32f4xx.h"
 #include "EventRecorder.h"
+#include <stdint.h>
 
-void GPIO_Init(void);
-void USART2_init(void);
-void USART2_WriteTest(void);
-void USART2_WriteString(uint8_t*); 
-static void DMA1_Stream6_Init(void);
-static void USART2_StartTxDMA(uint8_t *, uint16_t);
+/* =========================
+ * Messaggio da 8 byte
+ * ========================= */
+typedef struct {
+    uint8_t data[9];
+} uart_pkt_t;
+
+/* =========================
+ * Oggetti RTOS
+ * ========================= */
+osMessageQueueId_t qUartTx;
 osSemaphoreId_t semTxDone;
 
-//typedef void (*osThreadFunc_t) (void *argument);
-osThreadFunc_t Task1_p;   //un puntatore a funzione è un puntatore non è una funzione, quindi è
-                         //una variabile che contiene l'indirizzo di quel tipo di funzione							
-typedef struct {
-  char array [200];
-} msg_t;
-osMessageQueueId_t shared_queue;
+/* =========================
+ * Prototipi
+ * ========================= */
+static void GPIO_Init(void);
+static void USART2_Init(void);
+static void DMA1_Stream6_Init(void);
+static void USART2_StartTxDMA(uint8_t *buf, uint16_t len);
 
-void Task1(void*);
-void Task1(void* arg)
-{
- (void)arg;
-	//msg_t m1 = { .data = {1,2,3,4,5,6,7,8} };
-	const char string[]="Hello World from task1\n\r";
-	for(;;)
-   {
-     
-		 osMessageQueuePut(shared_queue, string, 0U, osWaitForever);
-		 GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
-		 osDelay(2000);
-	 }
-}
-
-
-void Task2(void*);
-void Task2(void* arg)
-{
- (void)arg;
-	//msg_t m2;
-	const char string[]="Hello World from task2\n\r";
-	for(;;)
-   {
-     osMessageQueuePut(shared_queue, string, 0U, osWaitForever);
-		 //osMessageQueueGet(shared_queue, &m2, NULL, osWaitForever);
-    // m.data contiene una COPIA sicura
-		 //GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
-		 osDelay(2000);
-	 }
-}
-
-void Task3(void*);
-void Task3(void* arg)
-{
- (void)arg;
-	msg_t m2;
-	uint8_t* p;
-	p= (uint8_t*)&m2;
-	for(;;)
-   {
-     osMessageQueueGet(shared_queue, &m2, NULL, osWaitForever);
-		 //USART2_WriteString((uint8_t*)p);
-     USART2_StartTxDMA(p, sizeof(m2));
-    // m.data contiene una COPIA sicura
-		 //GPIOA->ODR ^= GPIO_ODR_OD5_Msk;
-		 osDelay(2000);
-	 }
-}
-
-void createTask1(osThreadFunc_t Task)
-{
-  
-  osThreadAttr_t attr = {0};
-  attr.name = "Task1";
-  attr.stack_size = 512;
-  attr.priority = osPriorityNormal;
-  osThreadNew(Task,NULL,&attr);
- }
-
- 
- void createTask2(osThreadFunc_t Task)
-{
-  
-  osThreadAttr_t attr = {0};
-  attr.name = "Task2";
-  attr.stack_size = 512;
-  attr.priority = osPriorityNormal;
-  osThreadNew(Task,NULL,&attr);
- }
-void createTask3_UsartWrite(osThreadFunc_t Task)
-{
-  osThreadAttr_t attr = {0};
-  attr.name = "Task3";
-  attr.stack_size = 512;
-  attr.priority = osPriorityNormal;
-  osThreadNew(Task,NULL,&attr);
- }
- 
- int main (void)
-{
-	
-	//SystemCoreClockUpdate();
-	GPIO_Init();
-	USART2_init();
-  USART2_WriteTest(); /* Check if USART2 Writes on the terminal*/
-  DMA1_Stream6_Init();
-  EventRecorderInitialize(EventRecordAll, 1U);
-	EventRecorderStart();
-	Task1_p = Task1; /*solo a scopo dimostrativo passo il puntatore, potrei passare direttamente la funzione Task1 ad osThreadNew*/
-	osKernelInitialize();
-	shared_queue = osMessageQueueNew(4, 200*sizeof(uint8_t), NULL);
-	createTask1(Task1_p);
-	createTask2(Task2);
-	createTask3_UsartWrite(Task3);
-	osKernelStart();
-	for(;;) {
-  
-  }
-	
-}
-
-
-void GPIO_Init(void)
-{
-
-  RCC->AHB1ENR |=  1;             /* enable GPIOA clock */
-  GPIOA->MODER &= ~0x00000C00;    /* clear pin mode */
-  GPIOA->MODER |=  0x00000400;    /* set pin to output mode */
-  GPIOA->MODER |=  (1U << (5 * 2));  // set PA5 come output	
-}
-
+void TaskA(void *arg);
+void TaskB(void *arg);
+void TaskUartTx(void *arg);
 
 /* =========================
- * GPIO PA2 = USART2_TX
- * PA3 = USART2_RX
+ * Task A
  * ========================= */
-void USART2_init(void) {
-    // Clock GPIOA e USART2
-    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
-    RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
-
-    // PA2 = TX (AF7), PA3 = RX (AF7)
-    GPIOA->MODER &= ~((3U<<(2*2)) | (3U<<(2*3)));   // clear PA2, PA3
-    GPIOA->MODER |=  ((2U<<(2*2)) | (2U<<(2*3)));   // Alternate Function
-    GPIOA->AFR[0] &= ~((0xFU<<(4*2)) | (0xFU<<(4*3)));
-    GPIOA->AFR[0] |=  ((7U  <<(4*2)) | (7U  <<(4*3))); // AF7
-
-    // UART: 8N1, no flow control
-    USART2->CR1 = 0;
-    USART2->CR2 = 0;
-    USART2->CR3 = 0;
-    // Scegli il BRR giusto per il tuo PCLK1
-    USART2->BRR = 0x08B;  // 115200 @ PCLK1=16 MHz
-    //USART2->BRR = 0x16D;     // 115200 @ PCLK1=42 MHz
-    USART2->CR1 |= USART_CR1_TE | USART_CR1_RE;  // << abilita TX e RX
-    USART2->CR1 |= USART_CR1_UE;                 // abilita USART
-}
-
-
-void USART2_WriteTest(void) {
-char string_[]= "Test OK software started\n\r";
-     uint8_t* p_string=(uint8_t*)string_;
-     
-     while(*p_string !='\0')
-     {
-       while(!(USART2->SR & USART_SR_TXE)); /* wait until TX is enabled*/
-       
-       USART2->DR = *p_string;
-       
-       p_string ++;
-     }
-}
-
-
-void USART2_WriteString(uint8_t* p_string) {
-//char string_[]= "anna ";
-     //uint8_t* p_string=(uint8_t*)string_;
-     
-     while(*p_string !='\0')
-     {
-       while(!(USART2->SR & USART_SR_TXE)); /* wait until TX is enabled*/
-       USART2->DR= *p_string;
-       p_string ++;
-     }
-}
-
-
-static void DMA1_Stream6_Init(void)
+void TaskA(void *arg)
 {
-    RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
+    (void)arg;
 
-    /* Disabilita stream */
-    DMA1_Stream6->CR &= ~DMA_SxCR_EN;
-    while (DMA1_Stream6->CR & DMA_SxCR_EN) {}
+    uart_pkt_t pkt = { .data = { 'A','A','A','A','A','A','A','\n','\r' } };
 
-    /* Clear flags */
-    DMA1->HIFCR =
-          DMA_HIFCR_CTCIF6
-        | DMA_HIFCR_CHTIF6
-        | DMA_HIFCR_CTEIF6
-        | DMA_HIFCR_CDMEIF6
-        | DMA_HIFCR_CFEIF6;
-
-    NVIC_SetPriority(DMA1_Stream6_IRQn, 5);
-    NVIC_EnableIRQ(DMA1_Stream6_IRQn);
-}
-
-/* =========================
- * IRQ DMA1 Stream6
- * ========================= */
-void DMA1_Stream6_IRQHandler(void)
-{
-    /* Transfer complete stream 6? */
-    if (DMA1->HISR & DMA_HISR_TCIF6) {
-
-        /* Clear flag */
-        DMA1->HIFCR = DMA_HIFCR_CTCIF6;
-
-        /* Disabilita stream */
-        DMA1_Stream6->CR &= ~DMA_SxCR_EN;
-
-        /* opzionale: togli richiesta DMA su USART */
-        USART2->CR3 &= ~USART_CR3_DMAT;
-
-        /* Notifica task */
-        osSemaphoreRelease(semTxDone);
-    }
-
-    /* Eventuali errori */
-    if (DMA1->HISR & DMA_HISR_TEIF6) {
-        DMA1->HIFCR = DMA_HIFCR_CTEIF6;
-        DMA1_Stream6->CR &= ~DMA_SxCR_EN;
-        USART2->CR3 &= ~USART_CR3_DMAT;
-        osSemaphoreRelease(semTxDone);
+    for (;;) {
+        osMessageQueuePut(qUartTx, &pkt, 0U, osWaitForever);
+        osDelay(1000);
     }
 }
 
+/* =========================
+ * Task B
+ * ========================= */
+void TaskB(void *arg)
+{
+    (void)arg;
 
+    uart_pkt_t pkt = { .data = { 'B','B','B','B','B','B','B','\n','\r' } };
+
+    for (;;) {
+        osMessageQueuePut(qUartTx, &pkt, 0U, osWaitForever);
+        osDelay(1500);
+    }
+}
+
+/* =========================
+ * Task UART TX
+ * ========================= */
+void TaskUartTx(void *arg)
+{
+    (void)arg;
+
+    uart_pkt_t pkt;
+
+    for (;;) {
+        /* 1) prende 8 byte dalla queue */
+        osMessageQueueGet(qUartTx, &pkt, NULL, osWaitForever);
+
+        /* 2) avvia DMA verso USART2->DR */
+        USART2_StartTxDMA(pkt.data, sizeof(pkt.data));
+
+        /* 3) aspetta fine trasferimento DMA */
+        osSemaphoreAcquire(semTxDone, osWaitForever);
+    }
+}
+
+/* =========================
+ * Avvio DMA TX su USART2
+ * DMA1 Stream6 Channel4 è tipico per USART2_TX su STM32F4
+ * ========================= */
 static void USART2_StartTxDMA(uint8_t *buf, uint16_t len)
 {
     /* Disabilita stream prima di riconfigurare */
@@ -280,4 +125,117 @@ static void USART2_StartTxDMA(uint8_t *buf, uint16_t len)
 
     /* Avvia stream */
     DMA1_Stream6->CR |= DMA_SxCR_EN;
+}
+
+/* =========================
+ * IRQ DMA1 Stream6
+ * ========================= */
+void DMA1_Stream6_IRQHandler(void)
+{
+    /* Transfer complete stream 6? */
+    if (DMA1->HISR & DMA_HISR_TCIF6) {
+
+        /* Clear flag */
+        DMA1->HIFCR = DMA_HIFCR_CTCIF6;
+
+        /* Disabilita stream */
+        DMA1_Stream6->CR &= ~DMA_SxCR_EN;
+
+        /* opzionale: togli richiesta DMA su USART */
+        USART2->CR3 &= ~USART_CR3_DMAT;
+
+        /* Notifica task */
+        osSemaphoreRelease(semTxDone);
+    }
+
+    /* Eventuali errori */
+    if (DMA1->HISR & DMA_HISR_TEIF6) {
+        DMA1->HIFCR = DMA_HIFCR_CTEIF6;
+        DMA1_Stream6->CR &= ~DMA_SxCR_EN;
+        USART2->CR3 &= ~USART_CR3_DMAT;
+        osSemaphoreRelease(semTxDone);
+    }
+}
+
+/* =========================
+ * GPIO PA2 = USART2_TX
+ * PA3 = USART2_RX
+ * ========================= */
+static void GPIO_Init(void)
+{
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+
+    /* PA2, PA3 alternate function */
+    GPIOA->MODER &= ~((3U << (2 * 2)) | (3U << (3 * 2)));
+    GPIOA->MODER |=  ((2U << (2 * 2)) | (2U << (3 * 2)));
+
+    /* AF7 = USART2 */
+    GPIOA->AFR[0] &= ~((0xFU << (2 * 4)) | (0xFU << (3 * 4)));
+    GPIOA->AFR[0] |=  ((7U   << (2 * 4)) | (7U   << (3 * 4)));
+}
+
+/* =========================
+ * USART2 init minimale
+ * PCLK1 = 16 MHz, baud ~115200
+ * ========================= */
+static void USART2_Init(void)
+{
+    RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
+
+    /* Baudrate: 16 MHz / 115200 ˜ 138.9 -> 0x8B */
+    USART2->BRR = 0x008B;
+
+    /* TX enable, RX enable, USART enable */
+    USART2->CR1 = USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
+}
+
+/* =========================
+ * DMA1 Stream6 init base
+ * ========================= */
+static void DMA1_Stream6_Init(void)
+{
+    RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
+
+    /* Disabilita stream */
+    DMA1_Stream6->CR &= ~DMA_SxCR_EN;
+    while (DMA1_Stream6->CR & DMA_SxCR_EN) {}
+
+    /* Clear flags */
+    DMA1->HIFCR =
+          DMA_HIFCR_CTCIF6
+        | DMA_HIFCR_CHTIF6
+        | DMA_HIFCR_CTEIF6
+        | DMA_HIFCR_CDMEIF6
+        | DMA_HIFCR_CFEIF6;
+
+    NVIC_SetPriority(DMA1_Stream6_IRQn, 5);
+    NVIC_EnableIRQ(DMA1_Stream6_IRQn);
+}
+
+/* =========================
+ * main
+ * ========================= */
+int main(void)
+{
+    
+    EventRecorderInitialize(EventRecordAll, 1U);
+    EventRecorderStart();
+    SystemCoreClockUpdate();
+
+    GPIO_Init();
+    USART2_Init();
+    DMA1_Stream6_Init();
+
+    osKernelInitialize();
+
+    qUartTx  = osMessageQueueNew(8, sizeof(uart_pkt_t), NULL);
+    semTxDone = osSemaphoreNew(1, 0, NULL);
+
+    osThreadNew(TaskA, NULL, NULL);
+    osThreadNew(TaskB, NULL, NULL);
+    osThreadNew(TaskUartTx, NULL, NULL);
+
+    osKernelStart();
+
+    for (;;) {}
 }
